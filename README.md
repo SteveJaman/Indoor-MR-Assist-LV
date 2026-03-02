@@ -5,7 +5,7 @@ This research framework implements a high-efficiency Vision Language Model (VLM)
 
 ---
 
-## 🛠️ Phase 1 Architecture: System Setup & Bridge
+## Phase 1 Architecture: System Setup & Bridge
 This phase establishes the foundational communication between the Unity XR environment and the underlying Snapdragon XR2 Gen 2 hardware.
 
 ### 1. Model Preparation (Step 1)
