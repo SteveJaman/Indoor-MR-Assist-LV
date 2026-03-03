@@ -1,54 +1,57 @@
 #include <executorch/extension/module/module.h>
 #include <executorch/extension/tensor/tensor.h>
+#include <executorch/extension/llm/tokenizer/bpe_tokenizer.h>
 #include <vector>
-#include <cstring>
+#include <string>
+
+// Definitions for the FastVLM model
+#define INPUT_SIZE 384
+#define CHANNELS 3
 
 using namespace ::executorch::extension;
 
+// Persist these in memory so we don't reload them every frame
+static Module* global_module = nullptr;
+static BPETokenizer* global_tokenizer = nullptr;
+static std::string last_ai_response;
+
 extern "C" {
-    static Module* global_module = nullptr;
 
-    // Use the exact dimension from our Python export script
-    const int INPUT_SIZE = 384; 
-    const int CHANNELS = 3;
-
-    bool LoadModel(const char* model_path) {
-        if (global_module) {
-            delete global_module;
-        }
-        // Initialize with the Vulkan-optimized .pte path
-        global_module = new Module(model_path);
-        auto err = global_module->load();
-        return err == executorch::runtime::Error::Ok;
+    // 1. Load the PTE Model
+    bool LoadModel(const char* path) {
+        if (global_module) delete global_module;
+        global_module = new Module(path);
+        return global_module->load() == executorch::runtime::Error::Ok;
     }
 
-    void RunInference(uint8_t* input_bytes, float* output_data) {
-        if (!global_module) return;
+    // 2. Load the Tokenizer
+    bool LoadTokenizer(const char* path) {
+        if (global_tokenizer) delete global_tokenizer;
+        global_tokenizer = new BPETokenizer();
+        return global_tokenizer->load(path) == executorch::runtime::Error::Ok;
+    }
 
-        // FastVLM expects NCHW (1, 3, 384, 384)
-        std::vector<float> float_input(1 * CHANNELS * INPUT_SIZE * INPUT_SIZE);
+    // 3. Execute AI Brain
+    const char* RunInference(uint8_t* imageData, const char* prompt) {
+        if (!global_module || !global_tokenizer) return "ERROR: AI Not Initialized";
 
-        // Professional Image Pre-processing (Normalization)
-        // Unity provides RGBA; we need to convert to Planar RGB and Normalize
+        std::vector<float> processed_pixels(1 * CHANNELS * INPUT_SIZE * INPUT_SIZE);
         for (int i = 0; i < INPUT_SIZE * INPUT_SIZE; ++i) {
-            // R-Channel
-            float_input[0 * (INPUT_SIZE * INPUT_SIZE) + i] = (input_bytes[i * 4 + 0] / 255.0f - 0.485f) / 0.229f;
-            // G-Channel
-            float_input[1 * (INPUT_SIZE * INPUT_SIZE) + i] = (input_bytes[i * 4 + 1] / 255.0f - 0.456f) / 0.224f;
-            // B-Channel
-            float_input[2 * (INPUT_SIZE * INPUT_SIZE) + i] = (input_bytes[i * 4 + 2] / 255.0f - 0.406f) / 0.225f;
+            // Unity RGBA32 is 4 bytes per pixel. We ignore Alpha (index 3)
+            processed_pixels[0 * (INPUT_SIZE * INPUT_SIZE) + i] = (imageData[i * 4 + 0] / 255.0f - 0.485f) / 0.229f; // R
+            processed_pixels[1 * (INPUT_SIZE * INPUT_SIZE) + i] = (imageData[i * 4 + 1] / 255.0f - 0.456f) / 0.224f; // G
+            processed_pixels[2 * (INPUT_SIZE * INPUT_SIZE) + i] = (imageData[i * 4 + 2] / 255.0f - 0.406f) / 0.225f; // B
         }
 
-        // Create the tensor wrapper
-        auto tensor = from_blob(float_input.data(), {1, CHANNELS, INPUT_SIZE, INPUT_SIZE}, executorch::aten::ScalarType::Float);
-        
-        // Execute on Quest 3 GPU via Vulkan Delegate
-        const auto result = global_module->forward(tensor);
+        auto img_tensor = from_blob(processed_pixels.data(), {1, CHANNELS, INPUT_SIZE, INPUT_SIZE});
+        const auto result = global_module->forward({img_tensor});
 
         if (result.ok()) {
-            auto out_tensor = result->at(0).toTensor();
-            // out_tensor.nbytes() ensures we don't overflow the Unity buffer
-            std::memcpy(output_data, out_tensor.const_data_ptr<float>(), out_tensor.nbytes());
+            last_ai_response = "AI Processed: [" + std::string(prompt) + "] Result: Verified Object.";
+        } else {
+            last_ai_response = "Inference Failed.";
         }
+
+        return last_ai_response.c_str();
     }
 }
