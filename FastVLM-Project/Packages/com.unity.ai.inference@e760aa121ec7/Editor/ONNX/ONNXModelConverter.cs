@@ -588,6 +588,17 @@ namespace Unity.InferenceEngine.Editor.Onnx
                 case "MatMul":
                     SetOutput(gm.MatMul(GetInput(0), GetInput(1)));
                     break;
+
+                case "MatMulNBits":
+                {
+                    var k = node.GetOptionalInt("K", 0);
+                    var n = node.GetOptionalInt("N", 0);
+                    var bits = node.GetOptionalInt("bits", 4);
+                    var block_size = node.GetOptionalInt("block_size", 32);
+                    SetOutput(gm.MatMulNBits(GetInput(0), GetInput(1), GetInput(2), GetInput(3), k, n, bits, block_size));
+                    break;
+                }
+                
                 case "Max":
                 {
                     var prev = GetInput(0);
