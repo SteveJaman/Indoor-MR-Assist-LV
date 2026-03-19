@@ -1,0 +1,79 @@
+# OS generated files (macOS)
+.DS_Store
+.DS_Store?
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+.Trashes
+.Spotlight-V100
+.TemporaryItems
+.fseventsd
+.VolumeIcon.icns
+.DS_Store?
+.Icon?
+._*
+
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Uu]serSettings/
+
+# Keep the prebuilt WebGL export for Hugging Face deployment
+!yolo26-unity-web/
+!yolo26-unity-web/Build/
+!yolo26-unity-web/Build/**
+!yolo26-unity-web/TemplateData/
+!yolo26-unity-web/TemplateData/**
+
+# Unity generated files
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.userprefs
+*.userosscache
+*.pdb
+*.pidb
+*.booproj
+*.svd
+*.pdb.meta
+*.opendb
+*.VC.db
+
+# Unity cache / plugin related
+[Dd]erivedDataCache/
+*.apk
+*.aab
+*.unitypackage
+
+# macOS Finder/backup artifacts
+*~
+*.swp
+*.tmp
+
+# IDE / editor folders
+.vscode/
+.vs/
+.idea/
+
+# Misc build artifacts
+*.app
+*.exe
+*.dll
+*.dylib
+*.so
+*.o
+*.a
+*.lib
+*.ncb
+*.idb
+*.ipch
+*.class
