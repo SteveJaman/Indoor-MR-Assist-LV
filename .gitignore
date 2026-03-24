@@ -107,3 +107,9 @@ InitTestScene*.unity*
 
 # Ignore compiled models
 *.pte
+
+# Ignore Server files
+FastVLM_Server/*.onnx
+FastVLM_Server/*.json
+FastVLM_Server/*.bin
+FastVLM_Server/*.mp4
