@@ -97,3 +97,13 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Ignore model weights
+**/llava-fastvithd_0.5b_stage2/
+
+# Ignore the llava source code if you want to keep it as a separate library
+# (Usually we install this via requirements.txt or submodules)
+**/llava/
+
+# Ignore compiled models
+*.pte
