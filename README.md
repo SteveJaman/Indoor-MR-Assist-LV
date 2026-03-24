@@ -1,45 +1,60 @@
-# Indoor-MR-Assist-LV
-**On-device AI navigation for low-vision (LV) users on Meta Quest 3.**
+# Indoor-MR-Assist-LV: Research Hub
+**High-Efficiency AI Navigation for Low-Vision (LV) Users on Meta Quest 3**
 
-This research framework implements a high-efficiency Vision Language Model (VLM) inference engine using **ExecuTorch** and **Vulkan**. The project focuses on Phase 1: benchmarking NPU/GPU latency, memory footprint, and thermal stability within a **Zero-Copy Unity-to-C++ pipeline** for real-time spatial awareness.
-
-**Target Hardware:** Qualcomm Snapdragon XR2 Gen 2 (Meta Quest 3)
+This repository serves as a research framework for benchmarking Vision-Language Models (VLM) in indoor navigation. It contains multiple implementation paths, from pure on-device execution to hybrid edge-assisted architectures.
 
 ---
 
-## Phase 1 Architecture: System Setup & Bridge
-This phase establishes the foundational communication between the Unity XR environment and the underlying hardware.
+## 📂 Project Directory: Select Your Implementation
 
-### 1. Model Preparation (Step 1)
+### 1. [FastVLM-Project (Unity Local Version)](./FastVLM-Project)
+* **Engine:** Unity 6 + Sentis (`com.unity.ai.inference`)
+* **Focus:** Real-time scene captioning using ONNX weights within the Unity environment.
+* **Best for:** Rapid UI prototyping and testing Sentis custom layers.
+
+### 2. [FastVLM_Server (Jetson Edge Bridge)](./FastVLM_Server)
+* **Engine:** Python Flask + LLaVA/FastVLM 0.5B
+* **Focus:** Offloading heavy inference to a **Jetson Orin Nano** via local network.
+* **Best for:** High-fidelity spatial reasoning and testing "Video Segment" temporal logic.
+
+### 3. [Native_Bridge & Research_Pipeline](./Native_Bridge)
+* **Engine:** C++ Native Plugin + ExecuTorch + Vulkan
+* **Focus:** The "Phase 1" Core—achieving zero-copy memory mapping and NPU acceleration.
+* **Best for:** Production-level performance and hardware benchmarking.
+
+---
+
+## 🛠 Phase 1 Core Architecture: ExecuTorch + Vulkan
+This baseline established the foundational communication between the Unity XR environment and the underlying Snapdragon XR2 Gen 2 hardware.
+
+### 1. Model Preparation
 Converted and optimized the **Apple FastVLM-0.5B** model for mobile edge deployment.
-- **AOT Export:** Utilized `torch.export()` and `exir` to capture the model graph.
 - **Vulkan Partitioning:** Applied `VulkanPartitioner` with `force_fp16` to leverage the Adreno GPU/NPU.
-- **Serialization:** Generated optimized `.pte` binaries with custom schema synchronization for ExecuTorch runtime.
+- **Serialization:** Generated optimized `.pte` binaries for the ExecuTorch runtime.
 
-### 2. Native C++ Bridge (Step 2)
-Developed a high-performance C++ Native Plugin to bypass Unity's managed memory overhead.
+### 2. Native C++ Bridge
+A high-performance C++ Native Plugin to bypass Unity's managed memory overhead.
 - **Zero-Copy Tensor Mapping:** Direct memory access from Unity `Texture2D` to ExecuTorch Tensors via JNI.
-- **Preprocessing:** Implemented Planar RGB normalization $(x/255.0 - 0.485)/0.229$ directly in C++.
-- **Hardware Abstraction:** Linked against the Qualcomm AI Engine via the ExecuTorch C++ Runtime API.
+- **Hardware Abstraction:** Linked against the Qualcomm AI Engine.
 
 ---
 
-## Project Structure
-* `Research_Pipeline/`: Python scripts for VLM export, `requirements.txt`, and Vulkan partitioning logic.
-* `Native_Bridge/`: C++ source, `CMakeLists.txt` build system, and Android NDK configurations.
-* `Unity_Integration/`: C# interface logic, XR HUD, and the Model Loader for Quest 3.
-
-## Technical Achievements
-| Metric | Status | Implementation |
-| :--- | :--- | :--- |
-| **Inference Engine** | ✅ Ready | ExecuTorch Runtime |
-| **Memory Strategy** | ✅ Ready | Zero-Copy JNI Bridge |
-| **Backend Target** | ✅ Ready | Vulkan / Qualcomm NPU |
-| **Communication** | ✅ Ready | C# DllImport Heartbeat |
+## 📊 Research Benchmarks & Status
+| Implementation Path | Status | Target Backend | Latency Goal |
+| :--- | :--- | :--- | :--- |
+| **ExecuTorch Native** | ✅ Ready | Qualcomm NPU | < 500ms |
+| **Unity Sentis** | 🏗 Testing | GPU (Vulkan) | < 1.5s |
+| **Jetson Edge Bridge**| ✅ Ready | CPU/CUDA | < 3.0s (Network) |
 
 ---
 
-## Setup & Build
-1. **Python:** `pip install -r requirements.txt` and run `python export_fastvlm.py`.
-2. **Native:** Compile `.cpp` via Android NDK (r27+) using the provided `CMakeLists.txt`.
-3. **Unity:** Place compiled `.so` binaries in `Assets/Plugins/Android/libs/arm64-v8a/` and the `.pte` model in `StreamingAssets`.
+## 🚀 Quick Start
+Depending on which version you wish to test, navigate to the specific directory and follow the local `README.md`:
+
+1.  **For Jetson Server:** `cd FastVLM_Server && python server.py`
+2.  **For Unity Demo:** Open `FastVLM-Project` in Unity `6000.3.6f1`.
+3.  **For Native Build:** Use the provided `CMakeLists.txt` in `Native_Bridge` with Android NDK r27+.
+
+---
+
+© 2026 Anthony Nguyen & Research Team | Licensed under MIT & Unity Companion License
