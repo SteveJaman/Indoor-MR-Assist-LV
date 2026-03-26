@@ -10,27 +10,33 @@ from pathlib import Path
 # --- CONFIG ---
 JETSON_IP = "10.0.0.172"
 JETSON_URL = f"http://{JETSON_IP}:5000/detect_hazards"
+
+# Path Logic: Points to the /samples subfolder
 BASE_DIR = Path(__file__).parent
+SAMPLE_DIR = BASE_DIR / "samples"
 SAVE_DIR = BASE_DIR / "ai_snapshots"
-SAVE_DIR.mkdir(exist_ok=True) # Creates a folder for your research logs
+
+# Ensure directories exist
+SAMPLE_DIR.mkdir(exist_ok=True)
+SAVE_DIR.mkdir(exist_ok=True) 
 
 # --- SELECTION POOLS ---
 IMAGE_POOL = {
     "1": "car.jpg", 
-    "2": "2026 Jan. FUWAMOCO Doggy Pack Wallpaper.png"}
+    "2": "2026 Jan. FUWAMOCO Doggy Pack Wallpaper.png"
+}
 VIDEO_POOL = {
     "1": "deco.mp4",
-    "2": "TimeGhost.mp4" # Added the new video
+    "2": "TimeGhost.mp4" 
 }
 
 # Global flag for Adaptive Logic
 jetson_ready = True 
 
 def ai_worker(image_frame, frame_id, video_name):
-    """Background task: Sends frame to Jetson and saves a copy for documentation."""
+    """Background task: Sends frame to Jetson and saves documentation."""
     global jetson_ready
     try:
-        # Save a local copy so you can see the 'chaotic' frame later
         timestamp = int(time.time())
         snap_path = SAVE_DIR / f"{video_name}_frame_{frame_id}_{timestamp}.jpg"
         image_frame.save(snap_path)
@@ -48,18 +54,17 @@ def ai_worker(image_frame, frame_id, video_name):
             res = response.json().get('ai_response')
             print(f"\n[JETSON ANALYSIS - {video_name}] ({time.time()-start:.2f}s):")
             print(f"{'='*40}\n{res}\n{'='*40}")
-            print(f"Snapshot saved: {snap_path.name}")
     except Exception as e:
         print(f"\n[AI ERROR]: {e}")
     finally:
         jetson_ready = True
 
 def run_image_test():
-    print("\n--- Image Pool ---")
+    print("\n--- Image Pool (Source: /samples) ---")
     for k, v in IMAGE_POOL.items(): print(f"[{k}] {v}")
     idx = input("Select Image # > ")
     if idx in IMAGE_POOL:
-        img_path = BASE_DIR / IMAGE_POOL[idx]
+        img_path = SAMPLE_DIR / IMAGE_POOL[idx]
         if img_path.exists():
             img = Image.open(img_path).convert('RGB')
             buffer = io.BytesIO()
@@ -68,16 +73,17 @@ def run_image_test():
             print(f"[*] Sending {IMAGE_POOL[idx]}...")
             response = requests.post(JETSON_URL, files={'image': buffer})
             print(f"\n[RESULT]: {response.json().get('ai_response')}")
+        else:
+            print(f"[!] {IMAGE_POOL[idx]} not found in {SAMPLE_DIR}")
 
 def run_continuous_video(filename):
     global jetson_ready
-    vid_path = BASE_DIR / filename
+    vid_path = SAMPLE_DIR / filename
     if not vid_path.exists():
-        print(f"[!] {filename} not found in {BASE_DIR}")
+        print(f"[!] {filename} not found in {SAMPLE_DIR}")
         return
 
     print(f"[*] Analyzing Stream: {filename}")
-    print("[*] Adaptive Mode: Grabbing next frame immediately when Jetson is free.")
     
     plt.ion()
     fig, ax = plt.subplots()
@@ -86,7 +92,6 @@ def run_continuous_video(filename):
 
     try:
         for idx, frame in enumerate(iio.imiter(vid_path, plugin="pyav")):
-            # 1. LIVE VIDEO (Producer)
             if im_display is None:
                 im_display = ax.imshow(frame)
             else:
@@ -100,26 +105,20 @@ def run_continuous_video(filename):
             if not plt.fignum_exists(fig.number):
                 break
 
-            # 2. ADAPTIVE CONSUMER LOGIC
             if jetson_ready:
                 jetson_ready = False 
-                
-                # Resize to 448 for the 0.5B VLM model
                 current_pil = Image.fromarray(frame).resize((448, 448))
-                
-                # Strip file extension for the label
                 clean_name = Path(filename).stem
                 thread = threading.Thread(target=ai_worker, args=(current_pil, idx, clean_name))
                 thread.daemon = True
                 thread.start()
-
     finally:
         plt.close(fig)
         plt.ioff()
 
 def main_menu():
     while True:
-        print("\n=== VLM RESEARCH SUITE (ADAPTIVE) ===")
+        print("\n=== VLM RESEARCH SUITE (SAMPLES MODE) ===")
         print("[1] Test Static Images")
         print("[2] Run Continuous Video (Adaptive)")
         print("[Q] Exit")
@@ -129,7 +128,7 @@ def main_menu():
         if choice == '1':
             run_image_test()
         elif choice == '2':
-            print("\n-- Video Selection Pool --")
+            print("\n-- Video Pool (Source: /samples) --")
             for k, v in VIDEO_POOL.items(): print(f"[{k}] {v}")
             idx = input("Select Video # > ")
             if idx in VIDEO_POOL:
@@ -138,8 +137,4 @@ def main_menu():
             break
 
 if __name__ == "__main__":
-<<<<<<< HEAD:FastVLM_Server/vlm_client_eval_static_photo.py
-    run_test(IMAGE_NAME)
-=======
     main_menu()
->>>>>>> 354664f (feat: GPU-accelerated VLM server with TimeGhost (20MB) and Deco test suite):FastVLM_Server/vlm_client_eval.py
