@@ -1,0 +1,17 @@
+# Large Model Weights (Keep local only)
+llava-fastvithd_0.5b_stage2/
+llava-fastvithd_1.5b_stage3/
+llava-fastvithd_7b_stage3/
+*.pt
+*.onnx
+*.safetensors
+*.bin
+
+# Python junk
+__pycache__/
+.venv/
+*.pyc
+
+# Debug/Temporary Data
+debug_captures/
+*.jpg
