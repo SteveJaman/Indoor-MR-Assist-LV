@@ -1,44 +1,65 @@
 import requests
 import os
+import time
+import random
 
-# Configuration
+# --- CONFIGURATION ---
 SERVER_URL = "http://127.0.0.1:5000/detect_hazards"
-IMAGE_PATH = "frame_004_cam_8.jpg" 
+# Pointing to your specific Atrium3 North folder
+IMAGE_DIR = r"C:\Users\anguy\OneDrive\Desktop\Indoor-MR-Assist-LV\FastVLM_Server\FastVLM_Yolo_IPS\atrium3_north_split8_FOV90_P3"
 
-def send_test_request():
-    if not os.path.exists(IMAGE_PATH):
-        print(f"Error: {IMAGE_PATH} not found.")
+def run_random_batch_test(count=5):
+    if not os.path.exists(IMAGE_DIR):
+        print(f"Error: Folder not found at {IMAGE_DIR}")
         return
 
-    # 1. Cleaned up payload
-    # Note: Your current Flask server only looks for the 'image' file.
-    # Extra keys like 'prompt' in 'data' are ignored by the server but kept here for future-proofing.
-    data = {'prompt': 'Describe the path.'}
+    # 1. Gather all valid image files
+    all_files = [f for f in os.listdir(IMAGE_DIR) if f.lower().endswith(('.jpg', '.png'))]
+    
+    if len(all_files) < count:
+        print(f"Warning: Only {len(all_files)} images found. Testing all of them.")
+        test_files = all_files
+    else:
+        # 2. Randomly select 5 unique images
+        test_files = random.sample(all_files, count)
 
-    try:
-        print(f"[*] Sending 1.5B VLM Request to {SERVER_URL}...")
-        print("[*] Note: The server progress bar may stay at 0% for several minutes during 'Prefill'.")
+    print(f"[*] Starting Randomized Test: {len(test_files)} images selected from {len(all_files)} total.")
+    print("-" * 55)
+
+    for i, img_name in enumerate(test_files):
+        img_path = os.path.join(IMAGE_DIR, img_name)
         
-        with open(IMAGE_PATH, 'rb') as img:
-            files = {'image': img}
+        # Consistent mock data for testing logic across different Atrium angles
+        payload = {
+            'prompt': f'Random Test {i+1}',
+            'center_depth': '4.0',  # 4 meters (Atrium spaces are large)
+            'real_height': '1.6',   # 1.6 meters user height
+            'head_pitch': '0.0'     # Looking straight ahead
+        }
+
+        try:
+            print(f"[{i+1}/{count}] Processing: {img_name}...")
             
-            # Using a tuple for (connect_timeout, read_timeout)
-            # 10s to connect, 600s to wait for the heavy 1.5B math to finish.
-            response = requests.post(SERVER_URL, data=data, files=files, timeout=(10, 600))
+            with open(img_path, 'rb') as img:
+                files = {'image': img}
+                # YOLO usually takes < 1s, but we give it 30s for safety
+                response = requests.post(SERVER_URL, data=payload, files=files, timeout=120)
 
-        if response.status_code == 200:
-            print("\n[SUCCESS] Server Responded:")
-            result = response.json()
-            print(f"Response: {result.get('final_response')}")
-            print(f"Latency: {result.get('latency')}ms")
-        else:
-            print(f"\n[FAILED] Status Code: {response.status_code}")
-            print(response.text)
+            if response.status_code == 200:
+                result = response.json()
+                print(f"    Server Reported Latency: {result.get('latency')}")
+                print(f"    Final Speech Output:    {result.get('final_response')}")
+                print("-" * 35)
+            else:
+                print(f"    [!] Server Error: Status {response.status_code}")
 
-    except requests.exceptions.Timeout:
-        print("\n[ERROR] Request Timed Out. The 1.5B model is taking longer than 10 minutes to prefill.")
-    except Exception as e:
-        print(f"\n[ERROR] Connection Error: {e}")
+        except Exception as e:
+            print(f"    [!] Connection/File Error: {e}")
+
+        # 3. Give the Surface Pro a breather (Sequential processing safety)
+        time.sleep(2)
+
+    print("\n[FINISH] Random batch test complete. Check your server's debug_captures folder.")
 
 if __name__ == "__main__":
-    send_test_request()
+    run_random_batch_test(count=5)

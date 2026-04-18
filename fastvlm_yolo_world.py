@@ -19,6 +19,8 @@ app = Flask(__name__)
 # --- CONFIGURATION ---
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 VLM_PATH = str(BASE_DIR / "llava-fastvithd_1.5b_stage3")
+DEBUG_DIR = BASE_DIR / "debug_captures"
+DEBUG_DIR.mkdir(exist_ok=True) # Create folder if it doesn't exist
 
 HOST_IP = '0.0.0.0' 
 PORT = 5000
@@ -50,7 +52,6 @@ def load_engines():
     print(f"[*] Loading LLaVA 1.5B (Official Qwen-2 Logic)...")
     model_name = get_model_name_from_path(VLM_PATH)
     
-    # Official loader handles low_cpu_mem_usage internally
     tokenizer, vlm_model, image_processor, _ = load_pretrained_model(
         VLM_PATH, 
         None, 
@@ -70,58 +71,71 @@ def detect_hazards():
     with model_lock:
         start_time = time.time()
         img_file = request.files.get('image')
+        user_input = request.form.get('prompt', 'Describe path.')
+        # Ensure we don't filter out test images by setting a high default
+        dist_meters = float(request.form.get('distance', 1.0)) 
+        
+        # --- PROXIMITY FILTER ---
+        if dist_meters > 5.0: # Increased to 5m (15ft) for testing
+            print(f"[*] Filtered: Object at {dist_meters}m is too far.")
+            return jsonify({"status": "filtered", "final_response": "Clear path", "latency": 0})
+
         if not img_file: return jsonify({"status": "error"}), 400
 
         try:
-            # 1. Image Processing
+            # 1. Processing
             img_bytes = img_file.read()
             nparr = np.frombuffer(img_bytes, np.uint8)
             cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            pil_img = Image.fromarray(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB))
             
-            # Surface Pro Optimization: 336 is standard, 224 is 'Fast'
+            timestamp = int(time.time() * 1000)
+            cv2.imwrite(str(DEBUG_DIR / f"raw_{timestamp}.jpg"), cv_img)
+
+            h, w, _ = cv_img.shape
+            crop_size = 448 
+            start_x = (w - crop_size) // 2
+            start_y = (h - crop_size) // 2
+            cropped_img = cv_img[start_y:start_y+crop_size, start_x:start_x+crop_size]
+            cv2.imwrite(str(DEBUG_DIR / f"box_{timestamp}.jpg"), cropped_img)
+            
+            pil_img = Image.fromarray(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
             vlm_img = pil_img.resize((224, 224)) 
+            
             image_tensor = process_images([vlm_img], image_processor, vlm_model.config)[0]
             image_tensor = image_tensor.unsqueeze(0).to(DEVICE, dtype=TORCH_DTYPE)
 
-            # 2. Proper Conversation Formatting (Official Way)
+            # 2. VLM Inference
             conv = conv_templates["qwen_2"].copy()
             roles = conv.roles
-            
-            # Format: <|im_start|>user\n<image>\nDescribe path.<|im_end|>\n<|im_start|>assistant\n
-            prompt_message = DEFAULT_IMAGE_TOKEN + "\nDescribe the path and any obstacles you see."
+            prompt_message = DEFAULT_IMAGE_TOKEN + f"\n{user_input}"
             conv.append_message(roles[0], prompt_message)
             conv.append_message(roles[1], None)
-            prompt = conv.get_prompt()
+            
+            input_ids = tokenizer_image_token(conv.get_prompt(), tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(DEVICE)
 
-            input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(DEVICE)
-
-            # 3. Execution
-            max_new_tokens = 20
-            streamer = VisualStreamer(tokenizer, max_new_tokens)
-
-            print("[*] Processing Prefill (Image + Prompt)...")
             with torch.inference_mode():
                 output_ids = vlm_model.generate(
-                    input_ids, 
-                    images=image_tensor, 
-                    image_sizes=[vlm_img.size],
-                    do_sample=False, # Greedy decoding is fastest for CPU
-                    max_new_tokens=max_new_tokens,
-                    use_cache=True,
-                    streamer=streamer
+                    input_ids, images=image_tensor, 
+                    image_sizes=[vlm_img.size], do_sample=False, 
+                    max_new_tokens=20, use_cache=True
                 )
             
-            # Decode only the NEW tokens
-            vlm_context = tokenizer.decode(output_ids[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
-            
-            latency = int((time.time() - start_time) * 1000)
-            print(f"\n[SUCCESS] {latency}ms | {vlm_context}")
+            final_res = tokenizer.decode(output_ids[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
+            latency_ms = (time.time() - start_time) * 1000
 
+            # --- DEBUG LOGGING ---
+            print("\n" + "-" * 45)
+            print(f"User Input:     '{user_input}'")  
+            print(f"Latency:        {latency_ms:.0f}ms")
+            print(f"Distance:       {dist_meters}m")
+            print(f"Final Response: {final_res}")
+            print("-" * 45)
+
+            # RETURN KEYS MATCHING CLIENT EXPECTATIONS
             return jsonify({
                 "status": "success", 
-                "final_response": vlm_context, 
-                "latency": latency
+                "final_response": final_res, # Check if client expects 'final_speech'
+                "latency": int(latency_ms)
             })
 
         except Exception as e:
